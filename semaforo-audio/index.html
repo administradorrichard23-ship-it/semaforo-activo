@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- IMPORTAR LIBRERÍA GSAP -->
+    <script src="https://cloudflare.com"></script>
+</head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semáforo Accesible Multisensorial</title>
+    <style>
+    body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+    color: white;
+    
+    /* fondo moderno: Degradado oscuro con efecto de cuadrícula de laboratorio */
+    background-color: #0b111e;
+    background-image: 
+        linear-gradient(rgba(0, 123, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 123, 255, 0.03) 1px, transparent 1px),
+        radial-gradient(circle at center, #141f36 0%, #070a12 100%);
+    background-size: 20px 20px, 20px 20px, 100% 100%;
+
+
+            
+            /* CONFIGURACIÓN DE LA IMAGEN DE FONDO */
+            background-image: url('https://prensaregional.pe/wp-content/uploads/2026/08/Taxi-Colectivo-Mollendo-04082026.jpeg'); 
+            background-size: cover;          
+            background-position: center;     
+            background-repeat: no-repeat;    
+            background-attachment: fixed;    
+        }
+
+        
+        
+
+        /* Todo el contenido debe estar por encima de la capa oscura */
+        h1, .caja-semaforo, button {
+            position: relative;
+            z-index: 2;
+        }
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+        }
+
+        /* Contenedor del semáforo */
+        .caja-semaforo {
+            width: 120px;
+            background-color: #161f30; 
+            padding: 20px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 50px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+        }
+
+        /* Círculos apagados */
+        .circulo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: #0d1420; 
+            transition: background-color 0.4s ease, box-shadow 0.4s ease;
+        }
+
+       /* Círculos apagados */
+.circulo {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #0d1420;
+}
+
+/* Colores base cuando se activan (sin animación CSS) */
+#luz-roja.activo-css { background-color: #ff3b30; }
+#luz-verde.activo-css { background-color: #00e676; }
+
+/* ACCESIBILIDAD: Respeta si el usuario desactivó las animaciones en su sistema operativo */
+@media (prefers-reduced-motion: reduce) {
+  .circulo {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+        /* Colores encendidos */
+        #luz-roja.encendido { background-color: #ff3b30; color: #ff3b30; }
+        #luz-verde.encendido { background-color: #00e676; color: #00e676; }
+
+        /* Botón estilo "Pulse para cruzar" */
+        button {
+            margin-top: 25px;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid #ffcc00;
+            background-color: #007bff;
+            color: white;
+            border-radius: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <h1>ROJO • ESPERE</h1>
+
+    <!-- ACCESIBILIDAD ARIA -->
+    <div class="caja-semaforo" role="img" id="semaforo-status" aria-label="Semáforo peatonal cargando">
+        <div id="luz-roja" class="circulo"></div>
+        <div id="luz-verde" class="circulo"></div>
+    </div>
+
+    <button id="btn-avanzar">PULSE PARA CRUZAR</button>
+
+    <script>
+        const luces = ['luz-roja', 'luz-verde'];
+        const tiempos = [5000, 5000];
+        const textosAccesibles = ["Semáforo Peatonal en Rojo. ROJO • ESPERE.", "Semáforo Peatonal en Verde. VERDE • PUEDE CRUZAR."];
+        
+        let i = 0; 
+        let temporizador;
+        let intervaloSonido; 
+
+        // Inicializamos el contexto de audio para los pitidos de fondo
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // 🔊 FUNCIÓN DE VOZ HUMANA NATIVA
+        function hablarIndicacion(texto) {
+            // Cancela cualquier frase que se esté reproduciendo antes para que no se encimen
+            window.speechSynthesis.cancel(); 
+            
+            const mensaje = new SpeechSynthesisUtterance(texto);
+            mensaje.lang = 'es-ES'; // Configura la voz en español
+            mensaje.rate = 1.0;     // Velocidad normal del habla
+            mensaje.pitch = 1.0;    // Tono de voz equilibrado
+            
+            window.speechSynthesis.speak(mensaje);
+        }
+
+        // Pitido secundario para acompañar la voz
+        function reproducirPitido(frecuencia, duracion) {
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+            const oscilador = audioCtx.createOscillator();
+            const ganancia = audioCtx.createGain();
+            oscilador.type = 'sine';
+            oscilador.frequency.setValueAtTime(frecuencia, audioCtx.currentTime);
+            ganancia.gain.setValueAtTime(0.04, audioCtx.currentTime); // Volumen bajo para no tapar la voz
+            ganancia.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duracion);
+            oscilador.connect(ganancia);
+            ganancia.connect(audioCtx.destination);
+            oscilador.start();
+            oscilador.stop(audioCtx.currentTime + duracion);
+        }
+
+        function encender(cual) {
+            clearInterval(intervaloSonido);
+
+            luces.forEach((id, index) => {
+                const elemento = document.getElementById(id);
+                if (index === cual) {
+                    elemento.classList.add('encendido');
+                    elemento.setAttribute('aria-hidden', 'false');
+                } else {
+                    elemento.classList.remove('encendido');
+                    elemento.setAttribute('aria-hidden', 'true');
+                }
+            });
+
+            // Cambiar los textos visuales y etiquetas ARIA
+            const fraseVoz = cual === 0 ? "Semaforo en rojo. Espere por favor." : "Semaforo en verde. Puede cruzar de forma segura.";
+            document.querySelector('h1').innerText = cual === 0 ? "ROJO • ESPERE" : "VERDE • PUEDE CRUZAR";
+            document.getElementById('semaforo-status').setAttribute('aria-label', textosAccesibles[cual]);
+
+            // Ejecuta la locución de voz
+            hablarIndicacion(fraseVoz);
+
+            // Ritmos de pitidos de fondo que acompañan a la voz humana
+            if (cual === 0) {
+                intervaloSonido = setInterval(() => { reproducirPitido(250, 0.3); }, 1500); // Lento
+            } else {
+                intervaloSonido = setInterval(() => { reproducirPitido(750, 0.1); }, 350);  // Rápido
+            }
+        }
+
+        function iniciarCicloAutomatico() {
+            encender(i);
+            temporizador = setTimeout(() => {
+                i = (i + 1) % 2; 
+                iniciarCicloAutomatico();
+            }, tiempos[i]);
+        }
+
+        document.getElementById('btn-avanzar').addEventListener('click', () => {
+            clearTimeout(temporizador); 
+            i = (i + 1) % 2;            
+            iniciarCicloAutomatico();    
+        });
+
+        iniciarCicloAutomatico();
+    </script>
+</body>
+</html>
